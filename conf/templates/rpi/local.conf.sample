@@ -276,8 +276,8 @@ PACKAGECONFIG:append:pn-qemu-system-native = " sdl"
 CONF_VERSION = "2"
 
 
-BB_NUMBER_THREADS = "8"
-PARALLEL_MAKE = "-j 16"
+BB_NUMBER_THREADS = "4"
+PARALLEL_MAKE = "-j 4"
 PACKAGECONFIG:remove = "gold"
 
 WKS_FILE = "core-image-minimal.wks"
@@ -288,3 +288,7 @@ IMAGE_FSTYPES += " wic"
 DISTRO_FEATURES:append = " systemd"
 VIRTUAL-RUNTIME_init_manager = "systemd"
 VIRTUAL-RUNTIME_initscripts = ""
+
+RPI_USE_U_BOOT = "1"
+IMAGE_INSTALL:append = " u-boot u-boot-fw-utils"
+
