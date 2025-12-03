@@ -1,2 +1,3 @@
 # core-image-minimal.wks
+part /boot --source bootimg-partition --sourceparams="loader=u-boot.bin" --ondisk mmcblk0 --fstype=vfat --label boot --active
 part / --source rootfs --ondisk mmcblk0 --fstype=ext4 --label rootfs

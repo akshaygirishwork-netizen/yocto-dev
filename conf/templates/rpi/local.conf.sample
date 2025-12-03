@@ -35,7 +35,7 @@
 #MACHINE ?= "edgerouter"
 #
 # This sets the default machine to be qemux86-64 if no other machine is selected:
-MACHINE ??= "raspberrypi4"
+MACHINE ??= "raspberrypi3-64"
 
 #
 # Where to place downloads
@@ -86,7 +86,7 @@ MACHINE ??= "raspberrypi4"
 # Ultimately when creating custom policy, people will likely end up subclassing 
 # these defaults.
 #
-DISTRO ?= "poky"
+DISTRO ?= "custom-distro"
 # As an example of a subclass there is a "bleeding" edge policy configuration
 # where many versions are set to the absolute latest code from the upstream 
 # source control systems. This is just mentioned here as an example, its not
@@ -275,20 +275,6 @@ PACKAGECONFIG:append:pn-qemu-system-native = " sdl"
 # this doesn't mean anything to you.
 CONF_VERSION = "2"
 
-
+# CPU build parallelism
 BB_NUMBER_THREADS = "4"
 PARALLEL_MAKE = "-j 4"
-PACKAGECONFIG:remove = "gold"
-
-WKS_FILE = "core-image-minimal.wks"
-
-IMAGE_FSTYPES += " wic"
-
-# Use systemd as the init system
-DISTRO_FEATURES:append = " systemd"
-VIRTUAL-RUNTIME_init_manager = "systemd"
-VIRTUAL-RUNTIME_initscripts = ""
-
-RPI_USE_U_BOOT = "1"
-IMAGE_INSTALL:append = " u-boot u-boot-fw-utils"
-
