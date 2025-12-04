@@ -11,6 +11,8 @@
 #include <linux/interrupt.h> // For irqreturn_t, IRQ_HANDLED
 #include <linux/gpio.h>      // For gpio_request, gpio_direction_input, gpio_to_irq
 #include <linux/irq.h>       // For IRQF_TRIGGER_* flags
+#include <linux/workqueue.h>
+#include <linux/timer.h>
 
 #define MY_IOCTL_MAGIC 'A'
 
@@ -217,13 +219,35 @@ struct file_operations fops = {
     .unlocked_ioctl = my_ioctl,
 };
 
+static struct workqueue_struct *my_wq;
+
+static void my_work_handler(struct work_struct *work)
+{
+    printk(KERN_INFO ">>> Workqueue running (bottom half)\n");
+}
+static DECLARE_WORK(my_work, my_work_handler);
+
 static int gpio = 17;
 static int irq;
+
+static struct timer_list my_timer;
+static int timer_interval = 10000;
 
 static irqreturn_t my_irq_handler(int irq, void *dev_id)
 {
     printk(KERN_INFO ">> GPIO interrupt triggered\n");
+    // Queue bottom half work
+    queue_work(my_wq, &my_work);
+
+     // Start timer only when first interrupt occurs
+    mod_timer(&my_timer, jiffies + msecs_to_jiffies(timer_interval));
+
     return IRQ_HANDLED;
+}
+
+static void my_timer_handler(struct timer_list *t)
+{
+    printk(KERN_INFO ">>> Timer expired\n");
 }
 
 static int hello_init(void)
@@ -304,6 +328,11 @@ static int hello_init(void)
     request_irq(irq, my_irq_handler, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "my_gpio_irq", NULL);
     printk(KERN_INFO "IRQ Number=%d\n", irq);
 
+    my_wq = create_singlethread_workqueue("my_wq");
+
+    timer_setup(&my_timer, my_timer_handler, 0);
+    mod_timer(&my_timer, jiffies + msecs_to_jiffies(timer_interval));
+
     return 0;
 }
 
@@ -317,6 +346,9 @@ static void hello_exit(void)
     unregister_chrdev_region(dev_number, 1);
 
     free_irq(irq, NULL);
+    flush_workqueue(my_wq);
+    destroy_workqueue(my_wq);
+    del_timer_sync(&my_timer);
 
     printk(KERN_INFO "mychardev: module removed\n");
 }
