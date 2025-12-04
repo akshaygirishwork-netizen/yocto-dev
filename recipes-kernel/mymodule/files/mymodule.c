@@ -8,36 +8,38 @@
 #include <linux/seq_file.h>
 #include <linux/poll.h>
 #include <linux/ioctl.h>
+#include <linux/interrupt.h>     // For irqreturn_t, IRQ_HANDLED
+#include <linux/gpio.h>          // For gpio_request, gpio_direction_input, gpio_to_irq
+#include <linux/irq.h>         // For IRQF_TRIGGER_* flags
 
 #define MY_IOCTL_MAGIC 'A'
 
 #define IOCTL_CLEAR_BUFFER _IO(MY_IOCTL_MAGIC, 1)
-#define IOCTL_GET_SIZE     _IOR(MY_IOCTL_MAGIC, 2, int)
-#define IOCTL_SET_VALUE    _IOW(MY_IOCTL_MAGIC, 3, int)
-
+#define IOCTL_GET_SIZE _IOR(MY_IOCTL_MAGIC, 2, int)
+#define IOCTL_SET_VALUE _IOW(MY_IOCTL_MAGIC, 3, int)
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Akshay");
 MODULE_DESCRIPTION("Simple Hello World Kernel Module");
 
-int value=10;
+int value = 10;
 static DEFINE_MUTEX(my_mutex);
 
-dev_t dev_number; // major + minor number stored here
+dev_t dev_number;    // major + minor number stored here
 struct cdev my_cdev; // charector device structure
 
 char kbuf[1024];
 int data_size = 0;
 
-module_param(value,int,0644);
-MODULE_PARM_DESC(value,"An integer value");
+module_param(value, int, 0644);
+MODULE_PARM_DESC(value, "An integer value");
 
 static struct kobject *my_kobj;
 
 static struct class *my_class;
 static struct device *my_device;
 
-static DECLARE_WAIT_QUEUE_HEAD(wq);  // poll()
+static DECLARE_WAIT_QUEUE_HEAD(wq); // poll()
 static int data_available = 0;
 
 static int my_proc_show(struct seq_file *m, void *v)
@@ -53,9 +55,9 @@ static int my_proc_open(struct inode *inode, struct file *file)
 }
 
 static const struct proc_ops my_proc_ops = {
-    .proc_open    = my_proc_open,
-    .proc_read    = seq_read,
-    .proc_lseek   = seq_lseek,
+    .proc_open = my_proc_open,
+    .proc_read = seq_read,
+    .proc_lseek = seq_lseek,
     .proc_release = single_release,
 };
 
@@ -97,8 +99,9 @@ ssize_t my_read(struct file *file, char __user *buf, size_t len, loff_t *off)
 
     mutex_lock(&my_mutex);
 
-    if (*off >= data_size) {
-        data_available = 0;      // No more data
+    if (*off >= data_size)
+    {
+        data_available = 0; // No more data
         ret = 0;
         goto out;
     }
@@ -106,7 +109,8 @@ ssize_t my_read(struct file *file, char __user *buf, size_t len, loff_t *off)
     if (len > data_size - *off)
         len = data_size - *off;
 
-    if (copy_to_user(buf, kbuf + *off, len)) {
+    if (copy_to_user(buf, kbuf + *off, len))
+    {
         ret = -EFAULT;
         goto out;
     }
@@ -114,7 +118,7 @@ ssize_t my_read(struct file *file, char __user *buf, size_t len, loff_t *off)
     *off += len;
 
     if (*off >= data_size)
-        data_available = 0;      // All data read
+        data_available = 0; // All data read
 
     ret = len;
 
@@ -122,7 +126,6 @@ out:
     mutex_unlock(&my_mutex);
     return ret;
 }
-
 
 ssize_t my_write(struct file *file, const char __user *buf, size_t len, loff_t *off)
 {
@@ -133,7 +136,8 @@ ssize_t my_write(struct file *file, const char __user *buf, size_t len, loff_t *
     if (len > 1024)
         len = 1024;
 
-    if (copy_from_user(kbuf, buf, len)) {
+    if (copy_from_user(kbuf, buf, len))
+    {
         ret = -EFAULT;
         goto out;
     }
@@ -141,8 +145,8 @@ ssize_t my_write(struct file *file, const char __user *buf, size_t len, loff_t *
     data_size = len;
     *off = len;
 
-    data_available = 1;                // Data ready
-    wake_up_interruptible(&wq);       // Wake any waiting process
+    data_available = 1;         // Data ready
+    wake_up_interruptible(&wq); // Wake any waiting process
 
     ret = len;
 
@@ -160,7 +164,7 @@ __poll_t my_poll(struct file *file, poll_table *wait)
 
     // Check if data is available
     if (data_available)
-        mask |= POLLIN | POLLRDNORM;  // Data available for read
+        mask |= POLLIN | POLLRDNORM; // Data available for read
 
     // Always writable
     mask |= POLLOUT | POLLWRNORM;
@@ -174,65 +178,74 @@ long my_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
     switch (cmd)
     {
-        case IOCTL_CLEAR_BUFFER:
-            mutex_lock(&my_mutex);
-            data_size = 0;
-            memset(kbuf, 0, sizeof(kbuf));
-            mutex_unlock(&my_mutex);
-            printk(KERN_INFO "mychardev: buffer cleared\n");
-            break;
+    case IOCTL_CLEAR_BUFFER:
+        mutex_lock(&my_mutex);
+        data_size = 0;
+        memset(kbuf, 0, sizeof(kbuf));
+        mutex_unlock(&my_mutex);
+        printk(KERN_INFO "mychardev: buffer cleared\n");
+        break;
 
-        case IOCTL_GET_SIZE:
-            if (copy_to_user((int __user *)arg, &data_size, sizeof(int)))
-                return -EFAULT;
-            printk(KERN_INFO "mychardev: returned data_size = %d\n", data_size);
-            break;
+    case IOCTL_GET_SIZE:
+        if (copy_to_user((int __user *)arg, &data_size, sizeof(int)))
+            return -EFAULT;
+        printk(KERN_INFO "mychardev: returned data_size = %d\n", data_size);
+        break;
 
-        case IOCTL_SET_VALUE:
-            if (copy_from_user(&temp, (int __user *)arg, sizeof(int)))
-                return -EFAULT;
-            value = temp;
-            printk(KERN_INFO "mychardev: value updated to %d\n", value);
-            break;
+    case IOCTL_SET_VALUE:
+        if (copy_from_user(&temp, (int __user *)arg, sizeof(int)))
+            return -EFAULT;
+        value = temp;
+        printk(KERN_INFO "mychardev: value updated to %d\n", value);
+        break;
 
-        default:
-            return -EINVAL;
+    default:
+        return -EINVAL;
     }
 
     return 0;
 }
 
-
 // Map file operations to our functions
 struct file_operations fops = {
-    .owner   = THIS_MODULE,
-    .open    = my_open,
+    .owner = THIS_MODULE,
+    .open = my_open,
     .release = my_release,
-    .read    = my_read,
-    .write   = my_write,
-    .poll    = my_poll,
+    .read = my_read,
+    .write = my_write,
+    .poll = my_poll,
     .unlocked_ioctl = my_ioctl,
 };
 
+static int gpio = 17;
+static int irq;
+
+static irqreturn_t my_irq_handler (int irq, void *dev_id)
+{
+    printk(KERN_INFO ">> GPIO interrupt triggered\n");
+    return IRQ_HANDLED;
+}
 
 static int hello_init(void)
 {
     int ret;
 
-    ret=alloc_chrdev_region(&dev_number,0,1,"mychardev");
+    ret = alloc_chrdev_region(&dev_number, 0, 1, "mychardev");
 
-    if(ret < 0){
-    	printk(KERN_ERR "Failed to allocate device number\n");
-	return ret;	
+    if (ret < 0)
+    {
+        printk(KERN_ERR "Failed to allocate device number\n");
+        return ret;
     }
-    printk(KERN_INFO "allocated major number =%d,minor number=%d\n",MAJOR(dev_number),MINOR(dev_number));
-    
+    printk(KERN_INFO "allocated major number =%d,minor number=%d\n", MAJOR(dev_number), MINOR(dev_number));
+
     // 2. Initialize cdev
     cdev_init(&my_cdev, &fops);
 
-     // 3. Add cdev to kernel
+    // 3. Add cdev to kernel
     ret = cdev_add(&my_cdev, dev_number, 1);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         printk(KERN_ERR "Failed to add cdev\n");
         unregister_chrdev_region(dev_number, 1);
         return ret;
@@ -242,7 +255,8 @@ static int hello_init(void)
 
     // Create device class
     my_class = class_create(THIS_MODULE, "mychardev_class");
-    if (IS_ERR(my_class)) {
+    if (IS_ERR(my_class))
+    {
         printk(KERN_ERR "Failed to create class\n");
         cdev_del(&my_cdev);
         unregister_chrdev_region(dev_number, 1);
@@ -251,7 +265,8 @@ static int hello_init(void)
 
     // Create device node /dev/mychardev
     my_device = device_create(my_class, NULL, dev_number, NULL, "mychardev");
-    if (IS_ERR(my_device)) {
+    if (IS_ERR(my_device))
+    {
         printk(KERN_ERR "Failed to create device\n");
         class_destroy(my_class);
         cdev_del(&my_cdev);
@@ -263,19 +278,28 @@ static int hello_init(void)
 
     // Create /sys/kernel/mychardev directory
     my_kobj = kobject_create_and_add("mychardev", kernel_kobj);
-    if (!my_kobj) {
+    if (!my_kobj)
+    {
         printk(KERN_ERR "mychardev: failed to create kobject\n");
         return -ENOMEM;
     }
 
     // Create value attribute
-    if (sysfs_create_file(my_kobj, &value_attribute.attr)) {
+    if (sysfs_create_file(my_kobj, &value_attribute.attr))
+    {
         printk(KERN_ERR "mychardev: failed to create sysfs file\n");
         kobject_put(my_kobj);
         return -ENOMEM;
     }
     proc_create("mychardev_info", 0444, NULL, &my_proc_ops);
 
+    gpio_request(gpio, "my_gpio");
+    gpio_direction_input(gpio);
+
+    irq = gpio_to_irq(gpio);
+
+    request_irq(irq, my_irq_handler, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "my_gpio_irq", NULL);
+    printk(KERN_INFO "IRQ Number=%d\n", irq);
 
     return 0;
 }
@@ -284,10 +308,13 @@ static void hello_exit(void)
 {
     device_destroy(my_class, dev_number);
     class_destroy(my_class);
-    cdev_del(&my_cdev);                    // remove cdev
-    unregister_chrdev_region(dev_number,1);// release major/minor
-    kobject_put(my_kobj); //removes the directory and all attributes
+    cdev_del(&my_cdev);                      // remove cdev
+    unregister_chrdev_region(dev_number, 1); // release major/minor
+    kobject_put(my_kobj);                    // removes the directory and all attributes
     remove_proc_entry("mychardev_info", NULL);
+    
+    int irq_num = gpio_to_irq(17);
+    free_irq(irq_num, NULL);
 
     printk(KERN_INFO "mychardev: module removed\n");
 }
