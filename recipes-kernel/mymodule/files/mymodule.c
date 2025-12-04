@@ -8,9 +8,9 @@
 #include <linux/seq_file.h>
 #include <linux/poll.h>
 #include <linux/ioctl.h>
-#include <linux/interrupt.h>     // For irqreturn_t, IRQ_HANDLED
-#include <linux/gpio.h>          // For gpio_request, gpio_direction_input, gpio_to_irq
-#include <linux/irq.h>         // For IRQF_TRIGGER_* flags
+#include <linux/interrupt.h> // For irqreturn_t, IRQ_HANDLED
+#include <linux/gpio.h>      // For gpio_request, gpio_direction_input, gpio_to_irq
+#include <linux/irq.h>       // For IRQF_TRIGGER_* flags
 
 #define MY_IOCTL_MAGIC 'A'
 
@@ -220,7 +220,7 @@ struct file_operations fops = {
 static int gpio = 17;
 static int irq;
 
-static irqreturn_t my_irq_handler (int irq, void *dev_id)
+static irqreturn_t my_irq_handler(int irq, void *dev_id)
 {
     printk(KERN_INFO ">> GPIO interrupt triggered\n");
     return IRQ_HANDLED;
@@ -293,7 +293,10 @@ static int hello_init(void)
     }
     proc_create("mychardev_info", 0444, NULL, &my_proc_ops);
 
-    gpio_request(gpio, "my_gpio");
+    if (gpio_request(gpio, "my_gpio"))
+    {
+        printk(KERN_ERR "Failed to request GPIO %d\n", gpio);
+    }
     gpio_direction_input(gpio);
 
     irq = gpio_to_irq(gpio);
@@ -306,15 +309,14 @@ static int hello_init(void)
 
 static void hello_exit(void)
 {
+    remove_proc_entry("mychardev_info", NULL);
+    kobject_put(my_kobj);
     device_destroy(my_class, dev_number);
     class_destroy(my_class);
-    cdev_del(&my_cdev);                      // remove cdev
-    unregister_chrdev_region(dev_number, 1); // release major/minor
-    kobject_put(my_kobj);                    // removes the directory and all attributes
-    remove_proc_entry("mychardev_info", NULL);
-    
-    int irq_num = gpio_to_irq(17);
-    free_irq(irq_num, NULL);
+    cdev_del(&my_cdev);
+    unregister_chrdev_region(dev_number, 1);
+
+    free_irq(irq, NULL);
 
     printk(KERN_INFO "mychardev: module removed\n");
 }
