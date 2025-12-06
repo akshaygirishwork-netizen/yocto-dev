@@ -10,9 +10,13 @@
 #include <linux/ioctl.h>
 #include <linux/interrupt.h> // For irqreturn_t, IRQ_HANDLED
 #include <linux/gpio.h>      // For gpio_request, gpio_direction_input, gpio_to_irq
+#include <linux/of_gpio.h>
 #include <linux/irq.h>       // For IRQF_TRIGGER_* flags
 #include <linux/workqueue.h>
 #include <linux/timer.h>
+#include <linux/platform_device.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
 
 #define MY_IOCTL_MAGIC 'A'
 
@@ -227,7 +231,6 @@ static void my_work_handler(struct work_struct *work)
 }
 static DECLARE_WORK(my_work, my_work_handler);
 
-static int gpio = 17;
 static int irq;
 
 static struct timer_list my_timer;
@@ -250,94 +253,80 @@ static void my_timer_handler(struct timer_list *t)
     printk(KERN_INFO ">>> Timer expired\n");
 }
 
-static int hello_init(void)
+static int my_probe(struct platform_device *pdev)
 {
     int ret;
 
-    ret = alloc_chrdev_region(&dev_number, 0, 1, "mychardev");
+    struct device *dev = &pdev->dev;
+    int gpio;
+    u32 timer_ms;
 
-    if (ret < 0)
-    {
-        printk(KERN_ERR "Failed to allocate device number\n");
+    printk(KERN_INFO "mychardev: probe called\n");
+
+    /* --- 1. Read properties from Device Tree --- */
+    gpio = of_get_named_gpio(dev->of_node, "my-gpio", 0);
+    if (gpio < 0)
+        return gpio;
+
+    of_property_read_u32(dev->of_node, "timer-interval-ms", &timer_ms);
+    timer_interval = timer_ms;
+
+    printk(KERN_INFO "DT gpio=%d timer=%dms\n", gpio, timer_interval);
+
+
+    /* --- 2. Request GPIO and IRQ --- */
+    ret = gpio_request(gpio, "my_gpio");
+    if (ret) {
+        dev_err(dev, "Failed to request GPIO\n");
         return ret;
-    }
-    printk(KERN_INFO "allocated major number =%d,minor number=%d\n", MAJOR(dev_number), MINOR(dev_number));
-
-    // 2. Initialize cdev
-    cdev_init(&my_cdev, &fops);
-
-    // 3. Add cdev to kernel
-    ret = cdev_add(&my_cdev, dev_number, 1);
-    if (ret < 0)
-    {
-        printk(KERN_ERR "Failed to add cdev\n");
-        unregister_chrdev_region(dev_number, 1);
-        return ret;
-    }
-
-    printk(KERN_INFO "cdev added successfully\n");
-
-    // Create device class
-    my_class = class_create(THIS_MODULE, "mychardev_class");
-    if (IS_ERR(my_class))
-    {
-        printk(KERN_ERR "Failed to create class\n");
-        cdev_del(&my_cdev);
-        unregister_chrdev_region(dev_number, 1);
-        return PTR_ERR(my_class);
-    }
-
-    // Create device node /dev/mychardev
-    my_device = device_create(my_class, NULL, dev_number, NULL, "mychardev");
-    if (IS_ERR(my_device))
-    {
-        printk(KERN_ERR "Failed to create device\n");
-        class_destroy(my_class);
-        cdev_del(&my_cdev);
-        unregister_chrdev_region(dev_number, 1);
-        return PTR_ERR(my_device);
-    }
-
-    printk(KERN_INFO "/dev/mychardev created successfully\n");
-
-    // Create /sys/kernel/mychardev directory
-    my_kobj = kobject_create_and_add("mychardev", kernel_kobj);
-    if (!my_kobj)
-    {
-        printk(KERN_ERR "mychardev: failed to create kobject\n");
-        return -ENOMEM;
-    }
-
-    // Create value attribute
-    if (sysfs_create_file(my_kobj, &value_attribute.attr))
-    {
-        printk(KERN_ERR "mychardev: failed to create sysfs file\n");
-        kobject_put(my_kobj);
-        return -ENOMEM;
-    }
-    proc_create("mychardev_info", 0444, NULL, &my_proc_ops);
-
-    if (gpio_request(gpio, "my_gpio"))
-    {
-        printk(KERN_ERR "Failed to request GPIO %d\n", gpio);
     }
     gpio_direction_input(gpio);
 
     irq = gpio_to_irq(gpio);
 
-    request_irq(irq, my_irq_handler, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, "my_gpio_irq", NULL);
+    ret = devm_request_irq(dev, irq, my_irq_handler,
+                           IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+                           "my_gpio_irq", NULL);
+    if (ret < 0)
+        return ret;
+
     printk(KERN_INFO "IRQ Number=%d\n", irq);
 
+
+    /* --- 3. Init character device --- */
+    alloc_chrdev_region(&dev_number, 0, 1, "mychardev");
+    cdev_init(&my_cdev, &fops);
+    cdev_add(&my_cdev, dev_number, 1);
+
+    my_class = class_create(THIS_MODULE, "mychardev_class");
+    my_device = device_create(my_class, NULL, dev_number, NULL, "mychardev");
+
+
+    /* --- 4. Sysfs entries --- */
+    my_kobj = kobject_create_and_add("mychardev", kernel_kobj);
+    sysfs_create_file(my_kobj, &value_attribute.attr);
+
+
+    /* --- 5. Proc entry --- */
+    proc_create("mychardev_info", 0444, NULL, &my_proc_ops);
+
+
+    /* --- 6. Workqueue --- */
     my_wq = create_singlethread_workqueue("my_wq");
 
+
+    /* --- 7. Timer --- */
     timer_setup(&my_timer, my_timer_handler, 0);
     mod_timer(&my_timer, jiffies + msecs_to_jiffies(timer_interval));
 
     return 0;
 }
 
-static void hello_exit(void)
+
+static int my_remove(struct platform_device *pdev)
 {
+    printk(KERN_INFO "mychardev: remove called\n");
+
     remove_proc_entry("mychardev_info", NULL);
     kobject_put(my_kobj);
     device_destroy(my_class, dev_number);
@@ -350,8 +339,21 @@ static void hello_exit(void)
     destroy_workqueue(my_wq);
     del_timer_sync(&my_timer);
 
-    printk(KERN_INFO "mychardev: module removed\n");
+    return 0;
 }
 
-module_init(hello_init);
-module_exit(hello_exit);
+static const struct of_device_id my_of_match[] = {
+    { .compatible = "akshay,mychardev" },
+    { }
+};
+
+static struct platform_driver my_platform_driver = {
+    .probe = my_probe,
+    .remove = my_remove,
+    .driver = {
+        .name = "mychardev",
+        .of_match_table = my_of_match,
+    },
+};
+module_platform_driver(my_platform_driver);
+MODULE_DEVICE_TABLE(of, my_of_match);
