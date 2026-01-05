@@ -1,0 +1,14 @@
+software = {
+    version = "1.0",
+    description = "RPi SWUpdate demo",
+
+    compatible = { "raspberrypi3-64" },
+
+    images = {
+        {
+            filename = "rootfs.ext4",
+            device = "/dev/mmcblk0p2",
+            type = "raw"
+        }
+    }
+}
