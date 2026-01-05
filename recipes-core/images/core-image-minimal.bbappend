@@ -5,4 +5,4 @@ IMAGE_FSTYPES += " wic ext4"
 
 IMAGE_INSTALL:append = " openssh openssh-sshd dtc"
 
-IMAGE_INSTALL:append = " mymodule"
+IMAGE_INSTALL:append = " mymodule mycustom myrecipe"
