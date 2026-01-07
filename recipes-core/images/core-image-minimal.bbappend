@@ -6,8 +6,11 @@ IMAGE_FSTYPES += " wic ext4"
 IMAGE_INSTALL:append = " mymodule \
                          mycustom \
                          myrecipe \
-                         swupdate \ 
+                         busybox \
+                         u-boot-fw-utils \
+                         swupdate \
+                         libgcc \ 
+                         e2fsprogs \
                          swupdate-tools \
-                         util-linux-lsblk \
-                         curl"
+                         util-linux-lsblk"
 

@@ -1,14 +1,35 @@
 software = {
-    version = "1.0",
-    description = "RPi SWUpdate demo",
+    version = "1.1";
+    hardware-compatibility: [ "1.0" ];
 
-    compatible = { "raspberrypi3-64" },
-
-    images = {
-        {
-            filename = "rootfs.ext4",
-            device = "/dev/mmcblk0p2",
-            type = "raw"
-        }
+    stable : {
+        copy1 : {
+            images: ( {
+                filename = "core-image-minimal-raspberrypi3-64.ext4";
+                device = "/dev/mmcblk0p2"; // Partition A
+                type = "raw";
+            } );
+            // This tells SWUpdate to run 'fw_setenv rpipart 2'
+            bootloader: (
+                {
+                    name = "rpipart";
+                    value = "2";
+                }
+            );
+        };
+        copy2 : {
+            images: ( {
+                filename = "core-image-minimal-raspberrypi3-64.ext4";
+                device = "/dev/mmcblk0p3"; // Partition B
+                type = "raw";
+            } );
+            // This tells SWUpdate to run 'fw_setenv rpipart 3'
+            bootloader: (
+                {
+                    name = "rpipart";
+                    value = "3";
+                }
+            );
+        };
     }
 }
