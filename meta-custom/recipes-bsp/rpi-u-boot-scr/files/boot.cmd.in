@@ -1,0 +1,22 @@
+# 1. Get the original bootargs from the GPU firmware
+fdt addr ${fdt_addr} && fdt get value bootargs_orig /chosen bootargs
+
+# 2. Set default partition if mmcpart doesn't exist
+if test -z "${mmcpart}"; then setenv mmcpart 2; fi
+
+# 3. Handle SWUpdate logic: if ustate is 1, toggle partition and reset ustate
+if test "${ustate}" = "1"; then
+    if test "${mmcpart}" = "2"; then setenv mmcpart 3; else setenv mmcpart 2; fi
+    setenv ustate 0
+    saveenv
+fi
+
+# 4. Search and Replace mmcblk0p2/p3 with the correct one stored in mmcpart
+# This ensures root=/dev/mmcblk0p2 becomes root=/dev/mmcblk0p${mmcpart}
+setexpr bootargs gsub "mmcblk0p[23]" "mmcblk0p${mmcpart}" "${bootargs_orig}"
+
+# 5. Load and Boot the kernel
+fatload mmc 0:1 ${kernel_addr_r} @@KERNEL_IMAGETYPE@@
+if test ! -e mmc 0:1 uboot.env; then saveenv; fi;
+@@KERNEL_BOOTCMD@@ ${kernel_addr_r} - ${fdt_addr}
+
