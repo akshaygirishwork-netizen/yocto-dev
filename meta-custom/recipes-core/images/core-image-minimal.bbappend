@@ -12,5 +12,6 @@ IMAGE_INSTALL:append = " mymodule \
                          libgcc \ 
                          e2fsprogs \
                          swupdate-tools \
-                         util-linux-lsblk"
+                         util-linux-lsblk \
+                         wget"
 

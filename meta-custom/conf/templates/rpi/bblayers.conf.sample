@@ -6,12 +6,11 @@ BBPATH = "${TOPDIR}"
 BBFILES ?= ""
 
 BBLAYERS ?= " \
-  /home/akshay/yocto-kirkstone/poky/meta \
-  /home/akshay/yocto-kirkstone/poky/meta-poky \
-  /home/akshay/yocto-kirkstone/poky/meta-yocto-bsp \
-  /home/akshay/yocto-kirkstone/meta-custom \
-  /home/akshay/yocto-kirkstone/meta-raspberrypi \
-  /home/akshay/yocto-kirkstone/meta-openembedded/meta-oe \
-  /home/akshay/yocto-kirkstone/meta-swupdate \
-  /home/akshay/yocto-kirkstone/poky/build/workspace \
+  /home/akshay/yocto-dev/poky/meta \
+  /home/akshay/yocto-dev/poky/meta-poky \
+  /home/akshay/yocto-dev/poky/meta-yocto-bsp \
+  /home/akshay/yocto-dev/meta-custom \
+  /home/akshay/yocto-dev/meta-raspberrypi \
+  /home/akshay/yocto-dev/meta-openembedded/meta-oe \
+  /home/akshay/yocto-dev/meta-swupdate \
   "
