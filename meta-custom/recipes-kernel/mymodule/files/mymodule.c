@@ -36,6 +36,7 @@ struct cdev my_cdev; // charector device structure
 
 char kbuf[1024];
 int data_size = 0;
+static int gpio_num;
 
 module_param(value, int, 0644);
 MODULE_PARM_DESC(value, "An integer value");
@@ -267,6 +268,7 @@ static int my_probe(struct platform_device *pdev)
     gpio = of_get_named_gpio(dev->of_node, "my-gpio", 0);
     if (gpio < 0)
         return gpio;
+    gpio_num = gpio; 
 
     of_property_read_u32(dev->of_node, "timer-interval-ms", &timer_ms);
     timer_interval = timer_ms;
@@ -334,10 +336,12 @@ static int my_remove(struct platform_device *pdev)
     cdev_del(&my_cdev);
     unregister_chrdev_region(dev_number, 1);
 
-    free_irq(irq, NULL);
     flush_workqueue(my_wq);
     destroy_workqueue(my_wq);
     del_timer_sync(&my_timer);
+    gpio_free(gpio_num); 
+
+    printk(KERN_INFO "mychardev: GPIO %d freed\n", gpio_num);
 
     return 0;
 }
