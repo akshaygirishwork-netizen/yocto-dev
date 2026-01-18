@@ -1,0 +1,1 @@
+RPI_EXTRA_CONFIG:append = "\ndtoverlay=mychardev-overlay\n"

@@ -1,0 +1,19 @@
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+    /* Target the root node so the kernel scans it as a platform device */
+    fragment@0 {
+        target-path = "/"; 
+        __overlay__ {
+            mychardev: mychardev@0 {
+                compatible = "akshay,mychardev";
+                my-gpio = <&gpio 17 GPIO_ACTIVE_HIGH>;
+                timer-interval-ms = <10000>;
+                status = "okay";
+            };
+        };
+    };
+};

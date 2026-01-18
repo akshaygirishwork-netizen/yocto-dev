@@ -286,3 +286,5 @@ BB_TASK_NICE_LEVEL = "5"
 ENABLE_UART = "1"
 SERIAL_CONSOLES = "115200;ttyAMA0"
 RPI_EXTRA_CONFIG += "dtoverlay=disable-bt"
+
+IMAGE_BOOT_FILES:append = " mychardev-overlay.dtbo;overlays/mychardev-overlay.dtbo"
